@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-03
+
 ### Added
 
 - Added `anchor`, `anchorOffset` (RFC 8620 §5.5), `calculateTotal` and `collapseThreads` (RFC 8621 §4.4) to `JmapEmailQueryOptions`. `calculate_total` defaults to `true`, as it was always sent.
@@ -15,10 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the `vcard` feature, converting a ContactCard to and from vCard (RFC 9555): `JmapContactCard::to_vcard`, `from_vcard`, and `update_from_vcard` answering the `ContactCard/set` patch against a base vCard.
 - Added the `ical` feature, converting a parsed iCalendar object to a CalendarEvent, its one JSCalendar 2.0 entry: `JmapCalendarEvent::from_ical`.
 - Added `JmapCalendarEventPatch::diff`, the `CalendarEvent/set` patch between two events, `recurrenceOverrides` patched per recurrence id.
+- Added `max_len` to `JmapBlobDownload` and `max_blob_len` to `JmapClientStd`, 256 MiB by default.
 
 ### Changed
 
 - **BREAKING**: `JmapMethodError` gained `AnchorNotFound`, `UnsupportedSort` and `UnsupportedFilter` (RFC 8620 §5.5), which used to read as `Unknown`. `JmapEmailQueryOptions` literals without `..Default::default()` need the new fields.
+- **BREAKING**: Bumped io-http to 0.6. The coroutines take and yield its types, so a consumer bumps in step for a single version to resolve.
+
+  Its `Http11SendError`, carried by every `Send` variant, gained `Eof`, `HeadersTooLarge` and `BodyTooLarge`: a response head over 64 KiB or a body over 256 MiB now fails the exchange.
+
+- Changed the minimum Rust version to 1.89.
 
 ## [0.6.0] - 2026-10-09
 
@@ -199,7 +207,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Compiles the underlying TLS dependencies in vendored mode (forwarded to `pimalaya-stream/vendored`).
 
-[unreleased]: https://github.com/pimalaya/io-jmap/compare/v0.6.0..HEAD
+[unreleased]: https://github.com/pimalaya/io-jmap/compare/v0.7.0..HEAD
+[0.7.0]: https://github.com/pimalaya/io-jmap/compare/v0.6.0..v0.7.0
 [0.6.0]: https://github.com/pimalaya/io-jmap/compare/v0.5.0..v0.6.0
 [0.5.0]: https://github.com/pimalaya/io-jmap/compare/v0.4.2..v0.5.0
 [0.4.2]: https://github.com/pimalaya/io-jmap/compare/v0.4.1..v0.4.2

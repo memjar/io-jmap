@@ -42,6 +42,7 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
 
 use std::io::{self, Read, Write};
 
+use io_http::rfc9110::send::HTTP_DEFAULT_MAX_BODY_LEN;
 #[cfg(any(
     feature = "rustls-aws",
     feature = "rustls-ring",
@@ -287,6 +288,10 @@ pub struct JmapClientStd {
     pub http_auth: SecretString,
     /// The session discovered by [`Self::session_get`], if any.
     pub session: Option<JmapSession>,
+    /// Maximum size in bytes of a blob read by [`Self::blob_download`],
+    /// handed to [`JmapBlobDownload::max_len`]. Defaults to
+    /// [`HTTP_DEFAULT_MAX_BODY_LEN`].
+    pub max_blob_len: usize,
 }
 
 impl JmapClientStd {
@@ -298,6 +303,7 @@ impl JmapClientStd {
             stream: Box::new(stream),
             http_auth,
             session: None,
+            max_blob_len: HTTP_DEFAULT_MAX_BODY_LEN,
         }
     }
 
@@ -350,6 +356,7 @@ impl JmapClientStd {
             stream: Box::new(stream),
             http_auth,
             session: Some(session),
+            max_blob_len: HTTP_DEFAULT_MAX_BODY_LEN,
         }
     }
 
@@ -409,6 +416,7 @@ impl JmapClientStd {
             stream: Box::new(stream),
             http_auth,
             session: None,
+            max_blob_len: HTTP_DEFAULT_MAX_BODY_LEN,
         })
     }
 
@@ -515,6 +523,8 @@ impl JmapClientStd {
     /// with [`JmapClientStdError::UnexpectedRedirect`].
     pub fn blob_download(&mut self, download_url: &Url) -> Result<Vec<u8>, JmapClientStdError> {
         let mut coroutine = JmapBlobDownload::new(&self.http_auth, download_url);
+        coroutine.max_len = self.max_blob_len;
+
         let mut buf = [0u8; READ_BUFFER_SIZE];
         let mut arg: Option<&[u8]> = None;
 
@@ -927,6 +937,7 @@ impl fmt::Debug for JmapClientStd {
         f.debug_struct("JmapClientStd")
             .field("http_auth", &self.http_auth)
             .field("session", &self.session)
+            .field("max_blob_len", &self.max_blob_len)
             .finish_non_exhaustive()
     }
 }

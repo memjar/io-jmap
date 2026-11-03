@@ -24,6 +24,8 @@
 //!   → MAILBOX SET destroy (cleanup)
 //! ```
 
+#![allow(dead_code)]
+
 use std::{
     collections::BTreeMap,
     io::{Read, Result as IoResult, Write},
@@ -49,7 +51,7 @@ use url::Url;
 /// A stream that is either a plain TCP connection or a TLS-wrapped one.
 enum JmapStream {
     Plain(TcpStream),
-    Tls(StreamOwned<ClientConnection, TcpStream>),
+    Tls(Box<StreamOwned<ClientConnection, TcpStream>>),
 }
 
 impl Read for JmapStream {
@@ -103,7 +105,7 @@ pub fn run_jmaps(host: &str, _port: u16, http_auth: &str, email: &str) {
             let config = ClientConfig::with_platform_verifier().expect("TLS config");
             let conn = ClientConnection::new(Arc::new(config), server_name).expect("TLS handshake");
             let tcp = TcpStream::connect((host.as_str(), port)).expect("TCP connect");
-            JmapStream::Tls(StreamOwned::new(conn, tcp))
+            JmapStream::Tls(Box::new(StreamOwned::new(conn, tcp)))
         },
         &session_url,
         http_auth,

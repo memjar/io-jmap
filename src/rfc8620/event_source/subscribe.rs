@@ -375,10 +375,7 @@ mod tests {
 
     use secrecy::SecretString;
 
-    use crate::{
-        coroutine::*,
-        rfc8620::{event_source::subscribe::*, event_source::*, session::JmapSession},
-    };
+    use crate::rfc8620::{event_source::subscribe::*, event_source::*, session::JmapSession};
 
     fn synthetic_session() -> JmapSession {
         JmapSession {

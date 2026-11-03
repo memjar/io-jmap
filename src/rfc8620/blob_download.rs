@@ -53,7 +53,10 @@ use alloc::vec::Vec;
 
 use io_http::{
     coroutine::*,
-    rfc9110::{request::HttpRequest, send::HttpSendOutput},
+    rfc9110::{
+        request::HttpRequest,
+        send::{HTTP_DEFAULT_MAX_BODY_LEN, HttpSendOutput},
+    },
     rfc9112::send::{Http11Send, Http11SendError},
 };
 use log::{debug, trace};
@@ -85,6 +88,10 @@ pub struct JmapBlobDownloadOutput {
 
 /// I/O-free coroutine downloading a blob from a JMAP server (RFC 8620 §6.2).
 pub struct JmapBlobDownload {
+    /// Maximum size in bytes of the downloaded blob, past which the
+    /// download fails with [`Http11SendError::BodyTooLarge`]. Defaults to
+    /// [`HTTP_DEFAULT_MAX_BODY_LEN`].
+    pub max_len: usize,
     state: State,
 }
 
@@ -102,6 +109,7 @@ impl JmapBlobDownload {
         trace!("download url: {download_url}");
 
         Self {
+            max_len: HTTP_DEFAULT_MAX_BODY_LEN,
             state: State::Send(Http11Send::new(http_request)),
         }
     }
@@ -113,27 +121,31 @@ impl JmapCoroutine for JmapBlobDownload {
 
     fn resume(&mut self, arg: Option<&[u8]>) -> JmapCoroutineState<Self::Yield, Self::Return> {
         match &mut self.state {
-            State::Send(send) => match send.resume(arg) {
-                HttpCoroutineState::Yielded(y) => JmapCoroutineState::Yielded(y.into()),
-                HttpCoroutineState::Complete(Err(err)) => {
-                    JmapCoroutineState::Complete(Err(err.into()))
-                }
-                HttpCoroutineState::Complete(Ok(HttpSendOutput {
-                    response,
-                    keep_alive,
-                    ..
-                })) => {
-                    if !response.status.is_success() {
-                        let err = JmapBlobDownloadError::HttpStatus(*response.status);
-                        return JmapCoroutineState::Complete(Err(err));
-                    }
+            State::Send(send) => {
+                send.max_body_len = self.max_len;
 
-                    JmapCoroutineState::Complete(Ok(JmapBlobDownloadOutput {
-                        data: response.body,
+                match send.resume(arg) {
+                    HttpCoroutineState::Yielded(y) => JmapCoroutineState::Yielded(y.into()),
+                    HttpCoroutineState::Complete(Err(err)) => {
+                        JmapCoroutineState::Complete(Err(err.into()))
+                    }
+                    HttpCoroutineState::Complete(Ok(HttpSendOutput {
+                        response,
                         keep_alive,
-                    }))
+                        ..
+                    })) => {
+                        if !response.status.is_success() {
+                            let err = JmapBlobDownloadError::HttpStatus(*response.status);
+                            return JmapCoroutineState::Complete(Err(err));
+                        }
+
+                        JmapCoroutineState::Complete(Ok(JmapBlobDownloadOutput {
+                            data: response.body,
+                            keep_alive,
+                        }))
+                    }
                 }
-            },
+            }
         }
     }
 }
@@ -219,6 +231,22 @@ mod tests {
         let reply = build_http_reply(200, b"");
         let out = expect_complete_ok(&mut cor, &reply);
         assert!(out.data.is_empty());
+    }
+
+    #[test]
+    fn blob_over_max_len_fails() {
+        let mut cor = JmapBlobDownload::new(&make_auth(), &make_url());
+        cor.max_len = 4;
+
+        expect_wants_write(&mut cor, None);
+        expect_wants_read(&mut cor);
+
+        let reply = build_http_reply(200, b"hello blob");
+        let err = expect_complete_err(&mut cor, &reply);
+        assert!(matches!(
+            err,
+            JmapBlobDownloadError::Send(Http11SendError::BodyTooLarge(4))
+        ));
     }
 
     #[test]
